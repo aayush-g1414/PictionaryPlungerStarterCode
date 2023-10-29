@@ -1,5 +1,4 @@
-# IMPORTANT
-# unless you're willing to change the run.py script, keep the new_case, guess, and add_score methods.
+import json
 import numpy as np
 import cairocffi as cairo
 import matplotlib.pyplot as plt
@@ -38,9 +37,6 @@ def rdp_simplify(drawing):
     return [points_to_stroke(simplify_coords(stroke_to_points(stroke), 2.0)) for stroke in drawing]
 
 def vector_to_raster(vector_images, side=28, line_diameter=16, padding=16, bg_color=(0,0,0), fg_color=(1,1,1)):
-    """
-    padding and line_diameter are relative to the original 256x256 image.
-    """
     original_side = 256.0
     
     surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, side, side)
@@ -49,62 +45,84 @@ def vector_to_raster(vector_images, side=28, line_diameter=16, padding=16, bg_co
     ctx.set_line_cap(cairo.LINE_CAP_ROUND)
     ctx.set_line_join(cairo.LINE_JOIN_ROUND)
     ctx.set_line_width(line_diameter)
-
-    # scale to match the new size
-    # add padding at the edges for the line_diameter
-    # and add additional padding to account for antialiasing
-    total_padding = padding * 2. + line_diameter
-    new_scale = float(side) / float(original_side + total_padding)
-    ctx.scale(new_scale, new_scale)
-    ctx.translate(total_padding / 2., total_padding / 2.)
-
+    
     raster_images = []
     for vector_image in vector_images:
-        # clear background
         ctx.set_source_rgb(*bg_color)
         ctx.paint()
-        # print(vector_image)
+        
         bbox = np.hstack(vector_image).max(axis=1)
         offset = ((original_side, original_side) - bbox) / 2.
         offset = offset.reshape(-1,1)
         centered = [stroke + offset for stroke in vector_image]
-
-        # draw strokes, this is the most cpu-intensive part
-        ctx.set_source_rgb(*fg_color)        
+        
+        ctx.set_source_rgb(*fg_color)
         for xv, yv in centered:
             ctx.move_to(xv[0], yv[0])
             for x, y in zip(xv, yv):
                 ctx.line_to(x, y)
             ctx.stroke()
-
+        
         data = surface.get_data()
         raster_image = np.copy(np.asarray(data)[::4])
         raster_images.append(raster_image.reshape(side, side))
     
     return raster_images
 
-class Solution:
-    def __init__(self):
-        self.listOfStrokes = []
-        pass
+with open('./cases/writing_utensil.ndjson') as f:
+    data = f.readlines()
 
-    # this is a signal that a new drawing is about to be sent
-    def new_case(self):
-        # datapoint: {category: str, strokes: list[list[int], list[int]]}
-        self.listOfStrokes = []
+strokes = []
+for line in data:
+    stroke = json.loads(line)
+    strokes.append(stroke['strokes'])
+
+# Parameters for subplot layout
+# num_frames = len(strokes[0])
+# num_rows = 10   # Number of rows in the subplot grid
+# num_cols = 10   # Number of columns in the subplot grid
+# fig, axes = plt.subplots(num_rows, num_cols, figsize=(10, 10))
+print(len(strokes))
+iterations =  len(strokes) // 100
+connected = []
+
+for x in range(5):
+    # print(x)
+    # print(connected)
+    counter = 0
+    num_frames = len(strokes[0])
+    num_rows = 10   # Number of rows in the subplot grid
+    num_cols = 10   # Number of columns in the subplot grid
+    fig, axes = plt.subplots(num_rows, num_cols, figsize=(10, 10))
+  
+    for i in range(0, len(strokes), iterations): # len(strokes)
+        counter += 1
+        # frame_strokes = []
+        # for stroke in strokes:
+        #     try:
+        #         frame_strokes.append(stroke[i])
+        #     except:
+        #         pass
         
-        pass
-
-    # given a stroke, return a string of your guess
-    def guess(self, x: list[int], y: list[int]) -> str:
-        self.listOfStrokes.append([x, y])
+        #for j, frame in enumerate(strokes[i]):
+        try:
+            frame = strokes[i][x]
+            if x == 0:
+                connected.append([frame])
+                # print(len(connected[0]))
+            else:
+                connected[counter] += [frame]
+                # print(len(connected[0]))
+            # Modify this line to view each image frame by frame
+            image = vector_to_raster([scale(shift(rdp_simplify(connected[counter])))], side=256, line_diameter=8, padding=8)[0]
         
+            row = counter // num_cols
+            col = counter % num_cols
+            axes[row, col].imshow(image)
+            axes[row, col].axis('off')
+        except:
+            pass
 
-        # myGuess = input("Guess: ")
-        return self.listOfStrokes
-        pass
-
-    # this function is called when you get
-    def add_score(self, score: int):
-        print(score)
-        pass
+    plt.show()
+        # import time
+        # time.sleep(10)
